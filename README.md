@@ -9,25 +9,28 @@ A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Leve
 
 ## Source Code Tree
 
-> |--- data
->
-> |	|--- laptop
->
-> |	|--- restaurant
->
-> |	|--- data_info.txt - the preprocessing data information file
->
-> |	|--- test_data.txt - the preprocessing testing data file
->
-> |	|--- train_data.txt - the preprocessing training data file
->
-> |--- main.py
->
-> |--- model.py
->
-> |--- transfer.py - transfering the origin xml files to text files
->
-> |--- utils.py
->
-> |--- README.md
->
+```
+|--- data
+
+|	|--- laptop
+
+|	|--- restaurant
+
+|	|--- data_info.txt - the preprocessing data information file
+
+|	|--- test_data.txt - the preprocessing testing data file
+
+|	|--- train_data.txt - the preprocessing training data file
+
+|--- main.py
+
+|--- model.py
+
+|--- transfer.py - transfering the origin xml files to text files
+
+|--- utils.py
+
+|--- README.md
+```
+
+
