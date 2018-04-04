@@ -33,4 +33,10 @@ A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Leve
 |--- README.md
 ```
 
+## Results
+
+| Dataset    | Accuracy |
+| ---------- | -------- |
+| Laptop     | 69.436   |
+| Restaurant | 78.571   |
 
