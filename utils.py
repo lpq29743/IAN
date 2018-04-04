@@ -11,7 +11,7 @@ nlp = spacy.load("en")
 
 def get_data_info(train_fname, test_fname, save_fname, pre_processed):
     word2id, max_aspect_len, max_context_len = {}, 0, 0
-    word2id[0] = '<pad>'
+    word2id['<pad>'] = 0
     if pre_processed:
         if not os.path.isfile(save_fname):
             raise IOError(ENOENT, 'Not a file', save_fname)
@@ -33,11 +33,11 @@ def get_data_info(train_fname, test_fname, save_fname, pre_processed):
 
         lines = open(train_fname, 'r').readlines()
         for i in range(0, len(lines), 3):
-            sptoks = nlp(lines[i])
+            sptoks = nlp(lines[i].strip())
             words.extend([sp.text.lower() for sp in sptoks])
             if len(sptoks) - 1 > max_context_len:
                 max_context_len = len(sptoks) - 1
-            sptoks = nlp(lines[i + 1])
+            sptoks = nlp(lines[i + 1].strip())
             if len(sptoks) > max_aspect_len:
                 max_aspect_len = len(sptoks)
         word_count = Counter(words).most_common()
@@ -47,11 +47,11 @@ def get_data_info(train_fname, test_fname, save_fname, pre_processed):
     
         lines = open(test_fname, 'r').readlines()
         for i in range(0, len(lines), 3):
-            sptoks = nlp(lines[i])
+            sptoks = nlp(lines[i].strip())
             words.extend([sp.text.lower() for sp in sptoks])
             if len(sptoks) - 1 > max_context_len:
                 max_context_len = len(sptoks) - 1
-            sptoks = nlp(lines[i + 1])
+            sptoks = nlp(lines[i + 1].strip())
             if len(sptoks) > max_aspect_len:
                 max_aspect_len = len(sptoks)
         word_count = Counter(words).most_common()
@@ -90,13 +90,13 @@ def read_data(fname, word2id, max_aspect_len, max_context_len, save_fname, pre_p
                 if polarity == 'conflict':
                     continue
 
-                context_sptoks = nlp(lines[i])
+                context_sptoks = nlp(lines[i].strip())
                 context = []
                 for sptok in context_sptoks:
                     if sptok.text.lower() in word2id:
                         context.append(word2id[sptok.text.lower()])
 
-                aspect_sptoks = nlp(lines[i + 1])
+                aspect_sptoks = nlp(lines[i + 1].strip())
                 aspect = []
                 for aspect_sptok in aspect_sptoks:
                     if aspect_sptok.text.lower() in word2id:
@@ -115,7 +115,7 @@ def read_data(fname, word2id, max_aspect_len, max_context_len, save_fname, pre_p
                 f.write("%s\n" % labels[-1])
                 aspect_lens.append(len(aspect_sptoks))
                 f.write("%s\n" % aspect_lens[-1])
-                context_lens.append(len(context_sptoks))
+                context_lens.append(len(context_sptoks) - 1)
                 f.write("%s\n" % context_lens[-1])
 
     print("Read %s examples from %s" % (len(aspects), fname))

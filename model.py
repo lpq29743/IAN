@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tensorflow.python.ops import math_ops
 import numpy as np
 import time
 from utils import get_batch_index
@@ -106,13 +107,16 @@ class IAN(object):
             aspect_outputs_iter = aspect_outputs_iter.unstack(aspect_outputs)
             context_avg_iter = tf.TensorArray(tf.float32, 1, dynamic_size=True, infer_shape=False)
             context_avg_iter = context_avg_iter.unstack(context_avg)
+            aspect_lens_iter = tf.TensorArray(tf.int32, 1, dynamic_size=True, infer_shape=False)
+            aspect_lens_iter = aspect_lens_iter.unstack(self.aspect_lens)
             aspect_rep = tf.TensorArray(size=batch_size, dtype=tf.float32)
             aspect_att = tf.TensorArray(size=batch_size, dtype=tf.float32)
             def body(i, aspect_rep, aspect_att):
                 a = aspect_outputs_iter.read(i)
                 b = context_avg_iter.read(i)
+                l = math_ops.to_int32(aspect_lens_iter.read(i))
                 aspect_score = tf.reshape(tf.nn.tanh(tf.matmul(tf.matmul(a, weights['aspect_score']), tf.reshape(b, [-1, 1])) + biases['aspect_score']), [1, -1])
-                aspect_att_temp = tf.nn.softmax(aspect_score)
+                aspect_att_temp = tf.concat([tf.nn.softmax(tf.slice(aspect_score, [0, 0], [1, l])), tf.zeros([1, self.max_aspect_len - l])], 1)
                 aspect_att = aspect_att.write(i, aspect_att_temp)
                 aspect_rep = aspect_rep.write(i, tf.matmul(aspect_att_temp, a))
                 return (i + 1, aspect_rep, aspect_att)
@@ -126,13 +130,16 @@ class IAN(object):
             context_outputs_iter = context_outputs_iter.unstack(context_outputs)
             aspect_avg_iter = tf.TensorArray(tf.float32, 1, dynamic_size=True, infer_shape=False)
             aspect_avg_iter = aspect_avg_iter.unstack(aspect_avg)
+            context_lens_iter = tf.TensorArray(tf.int32, 1, dynamic_size=True, infer_shape=False)
+            context_lens_iter = context_lens_iter.unstack(self.context_lens)
             context_rep = tf.TensorArray(size=batch_size, dtype=tf.float32)
             context_att = tf.TensorArray(size=batch_size, dtype=tf.float32)
             def body(i, context_rep, context_att):
                 a = context_outputs_iter.read(i)
                 b = aspect_avg_iter.read(i)
+                l = math_ops.to_int32(context_lens_iter.read(i))
                 context_score = tf.reshape(tf.nn.tanh(tf.matmul(tf.matmul(a, weights['context_score']), tf.reshape(b, [-1, 1])) + biases['context_score']), [1, -1])
-                context_att_temp = tf.nn.softmax(context_score)
+                context_att_temp = tf.concat([tf.nn.softmax(tf.slice(context_score, [0, 0], [1, l])), tf.zeros([1, self.max_context_len - l])], 1)
                 context_att = context_att.write(i, context_att_temp)
                 context_rep = context_rep.write(i, tf.matmul(context_att_temp, a))
                 return (i + 1, context_rep, context_att)
