@@ -187,7 +187,7 @@ class IAN(object):
         aspects, contexts, labels, aspect_lens, context_lens = data
         cost, acc, cnt = 0., 0, 0
 
-        for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(data), False, 1.0):
+        for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects), False, 1.0):
             loss, accuracy, step, summary = self.sess.run([self.cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict=sample)
             cost += loss * num
             acc += accuracy
@@ -201,7 +201,7 @@ class IAN(object):
 
         aspects, contexts, labels, aspect_lens, context_lens = train_data
         with open('analysis/train_' + str(timestamp) + '.txt', 'w') as f:
-            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(train_data), False, 1.0):
+            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects), False, 1.0):
                 aspect_atts, context_atts, correct_pred = self.sess.run([self.aspect_atts, self.context_atts, self.correct_pred], feed_dict=sample)
                 for a, b, c in zip(aspect_atts, context_atts, correct_pred):
                     a = str(a).replace('\n', '')
@@ -211,7 +211,7 @@ class IAN(object):
 
         aspects, contexts, labels, aspect_lens, context_lens = test_data
         with open('analysis/test_' + str(timestamp) + '.txt', 'w') as f:
-            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(test_data), False, 1.0):
+            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects), False, 1.0):
                 aspect_atts, context_atts, correct_pred = self.sess.run([self.aspect_atts, self.context_atts, self.correct_pred], feed_dict=sample)
                 for a, b, c in zip(aspect_atts, context_atts, correct_pred):
                     a = str(a).replace('\n', '')
