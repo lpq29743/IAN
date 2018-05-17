@@ -4,6 +4,7 @@ A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Leve
 
 ## Quick Start
 
+- use `pip install -r requirements.txt` to install required packages
 - Create three empty folders: 'analysis' for saving analyzing results, 'logs' for saving experiment logs and 'models' for saving experiment models 
 - Download the 300-dimensional pre-trained word vectors from [Glove](https://nlp.stanford.edu/projects/glove/) and save it in the 'data' folder as 'data/glove.6B.300d.txt'
 
@@ -40,3 +41,8 @@ A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Leve
 | Laptop     | 69.436   |
 | Restaurant | 78.571   |
 
+## Todo List
+
+- GPU Accelerating
+- Implementing by other deep learning frameworks
+- Separating training, testing and analyzing
