@@ -2,6 +2,7 @@ import tensorflow as tf
 from utils import get_data_info, read_data, load_word_embeddings
 from model import IAN
 import os
+import time
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -29,6 +30,8 @@ tf.app.flags.DEFINE_string('embedding_matrix', '', 'word ids to word vectors')
 
 
 def main(_):
+    start_time = time.time()
+
     print('Loading data info ...')
     word2id, FLAGS.max_aspect_len, FLAGS.max_context_len = get_data_info(FLAGS.train_file_name, FLAGS.test_file_name,
                                                                          FLAGS.data_info, FLAGS.pre_processed)
@@ -46,6 +49,9 @@ def main(_):
         model = IAN(FLAGS, sess)
         model.build_model()
         model.run(train_data, test_data)
+
+    end_time = time.time()
+    print('Time Costing: %s' % (end_time - start_time))
 
 
 if __name__ == '__main__':

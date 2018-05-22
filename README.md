@@ -45,4 +45,3 @@ A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Leve
 
 - GPU Accelerating
 - Implementing by other deep learning frameworks
-- Separating training, testing and analyzing
