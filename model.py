@@ -1,8 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
-import numpy as np
 import time
 from utils import get_batch_index
+
 
 class IAN(object):
 
@@ -15,11 +15,10 @@ class IAN(object):
         self.learning_rate = config.learning_rate
         self.l2_reg = config.l2_reg
         self.dropout = config.dropout
-        
-        self.word2id = config.word2id
+
         self.max_aspect_len = config.max_aspect_len
         self.max_context_len = config.max_context_len
-        self.word2vec = config.word2vec
+        self.embedding_matrix = config.embedding_matrix
         self.sess = sess
 
     def build_model(self):
@@ -31,11 +30,11 @@ class IAN(object):
             self.context_lens = tf.placeholder(tf.int32, None)
             self.dropout_keep_prob = tf.placeholder(tf.float32)
             
-            aspect_inputs = tf.nn.embedding_lookup(self.word2vec, self.aspects)
+            aspect_inputs = tf.nn.embedding_lookup(self.embedding_matrix, self.aspects)
             aspect_inputs = tf.cast(aspect_inputs, tf.float32)
             aspect_inputs = tf.nn.dropout(aspect_inputs, keep_prob=self.dropout_keep_prob)
             
-            context_inputs = tf.nn.embedding_lookup(self.word2vec, self.contexts)
+            context_inputs = tf.nn.embedding_lookup(self.embedding_matrix, self.contexts)
             context_inputs = tf.cast(context_inputs, tf.float32)
             context_inputs = tf.nn.dropout(context_inputs, keep_prob=self.dropout_keep_prob)
         
@@ -111,6 +110,7 @@ class IAN(object):
             aspect_lens_iter = aspect_lens_iter.unstack(self.aspect_lens)
             aspect_rep = tf.TensorArray(size=batch_size, dtype=tf.float32)
             aspect_att = tf.TensorArray(size=batch_size, dtype=tf.float32)
+
             def body(i, aspect_rep, aspect_att):
                 a = aspect_outputs_iter.read(i)
                 b = context_avg_iter.read(i)
@@ -120,6 +120,7 @@ class IAN(object):
                 aspect_att = aspect_att.write(i, aspect_att_temp)
                 aspect_rep = aspect_rep.write(i, tf.matmul(aspect_att_temp, a))
                 return (i + 1, aspect_rep, aspect_att)
+
             def condition(i, aspect_rep, aspect_att):
                 return i < batch_size
             _, aspect_rep_final, aspect_att_final = tf.while_loop(cond=condition, body=body, loop_vars=(0, aspect_rep, aspect_att))
@@ -134,6 +135,7 @@ class IAN(object):
             context_lens_iter = context_lens_iter.unstack(self.context_lens)
             context_rep = tf.TensorArray(size=batch_size, dtype=tf.float32)
             context_att = tf.TensorArray(size=batch_size, dtype=tf.float32)
+
             def body(i, context_rep, context_att):
                 a = context_outputs_iter.read(i)
                 b = aspect_avg_iter.read(i)
@@ -143,6 +145,7 @@ class IAN(object):
                 context_att = context_att.write(i, context_att_temp)
                 context_rep = context_rep.write(i, tf.matmul(context_att_temp, a))
                 return (i + 1, context_rep, context_att)
+
             def condition(i, context_rep, context_att):
                 return i < batch_size
             _, context_rep_final, context_att_final = tf.while_loop(cond=condition, body=body, loop_vars=(0, context_rep, context_att))
@@ -153,7 +156,7 @@ class IAN(object):
             self.predict = tf.matmul(self.reps, weights['softmax']) + biases['softmax']
 
         with tf.name_scope('loss'):
-            self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = self.predict, labels = self.labels))
+            self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = self.predict, labels = self.labels))
             self.global_step = tf.Variable(0, name="tr_global_step", trainable=False)
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost, global_step=self.global_step)
 
