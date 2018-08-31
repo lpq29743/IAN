@@ -1,6 +1,6 @@
 # IAN
 
-A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Level Sentiment Classification"](http://static.ijcai.org/proceedings-2017/0568.pdf) (Dehong Ma, IJCAI 2017)
+A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Level Sentiment Classification"](https://arxiv.org/pdf/1709.00893.pdf) (Dehong Ma, IJCAI 2017)
 
 ## Quick Start
 
