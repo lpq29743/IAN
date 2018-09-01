@@ -235,7 +235,7 @@ class IAN(object):
                 max_acc = test_acc
                 step = i
                 saver.save(self.sess, 'models/model_iter', global_step=step)
-            print('epoch %s: train-loss=%.6f; train-acc=%.6f; train-loss=%.6f; test-acc=%.6f;' % (str(i), train_loss, train_acc, test_loss, test_acc))
+            print('epoch %s: train-loss=%.6f; train-acc=%.6f; test-loss=%.6f; test-acc=%.6f;' % (str(i), train_loss, train_acc, test_loss, test_acc))
         saver.save(self.sess, 'models/model_final')
         print('The max accuracy of testing results is %s of step %s' % (max_acc, step))
 
