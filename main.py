@@ -43,8 +43,8 @@ def main(_):
     config.gpu_options.per_process_gpu_memory_fraction = 0.5
     with tf.Session(config=config) as sess:
         model = IAN(FLAGS, sess)
-        model.build_model()
-        model.run(train_data, test_data)
+        model.build_model(train_data, test_data)
+        model.run()
 
     end_time = time.time()
     print('Time Costing: %s' % (end_time - start_time))

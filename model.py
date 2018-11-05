@@ -22,13 +22,24 @@ class IAN(object):
         self.embedding_matrix = config.embedding_matrix
         self.sess = sess
 
-    def build_model(self):
+    def build_model(self, train_data, test_data):
         with tf.name_scope('inputs'):
-            self.aspects = tf.placeholder(tf.int32, [None, self.max_aspect_len])
-            self.contexts = tf.placeholder(tf.int32, [None, self.max_context_len])
-            self.labels = tf.placeholder(tf.int32, [None, self.n_class])
-            self.aspect_lens = tf.placeholder(tf.int32, None)
-            self.context_lens = tf.placeholder(tf.int32, None)
+            self.train_data_size = len(train_data[0])
+            train_data = tf.data.Dataset.from_tensor_slices(train_data)
+            train_data = train_data.shuffle(buffer_size=self.train_data_size)
+            train_data = train_data.batch(self.batch_size)
+            train_data = train_data.repeat()
+
+            self.test_data_size = len(test_data[0])
+            test_data = tf.data.Dataset.from_tensor_slices(test_data)
+            test_data = test_data.batch(self.test_data_size)
+
+            iterator = tf.data.Iterator.from_structure(train_data.output_types, test_data.output_shapes)
+            self.aspects, self.contexts, self.labels, self.aspect_lens, self.context_lens = iterator.get_next()
+
+            self.train_init_op = iterator.make_initializer(train_data)
+            self.test_init_op = iterator.make_initializer(test_data)
+
             self.dropout_keep_prob = tf.placeholder(tf.float32)
 
             aspect_inputs = tf.nn.embedding_lookup(self.embedding_matrix, self.aspects)
@@ -218,45 +229,33 @@ class IAN(object):
     def run(self, train_data, test_data):
         saver = tf.train.Saver(tf.trainable_variables())
 
-        train_data_size = len(train_data[0])
-        train_data = tf.data.Dataset.from_tensor_slices(train_data)
-        train_data = train_data.shuffle(buffer_size=train_data_size)
-        train_data = train_data.batch(self.batch_size)
-        train_data = train_data.repeat()
-        train_iter = train_data.make_one_shot_iterator()
-        next_train_el = train_iter.get_next()
 
-        test_data_size = len(test_data[0])
-        test_data = tf.data.Dataset.from_tensor_slices(test_data)
-        test_data = test_data.batch(test_data_size)
-        test_iter = test_data.make_one_shot_iterator()
-        next_test_el = test_iter.get_next()
 
         print('Training ...')
         self.sess.run(tf.global_variables_initializer())
         max_acc, step = 0., -1
         for i in range(self.n_epoch):
             cost, acc = 0., 0
-            for _ in range(math.ceil(train_data_size / self.batch_size)):
+            for _ in range(math.ceil(self.train_data_size / self.batch_size)):
                 _, _, loss, accuracy, step, summary = self.sess.run(
-                    [next_train_el, self.optimizer, self.total_cost, self.accuracy, self.global_step,
+                    [self.train_init_op, self.optimizer, self.total_cost, self.accuracy, self.global_step,
                      self.train_summary_op], feed_dict={self.dropout_keep_prob: self.dropout})
                 cost += loss
                 acc += accuracy
                 self.train_summary_writer.add_summary(summary, step)
 
-            train_loss = cost / train_data_size
-            train_acc = acc / train_data_size
+            train_loss = cost / self.train_data_size
+            train_acc = acc / self.train_data_size
 
             cost, acc = 0., 0
             _, loss, accuracy, step, summary = self.sess.run(
-                [next_test_el, self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
+                [self.test_init_op, self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
             cost += loss
             acc += accuracy
             self.test_summary_writer.add_summary(summary, step)
 
-            test_loss = cost / test_data_size
-            test_acc = acc / test_data_size
+            test_loss = cost / self.test_data_size
+            test_acc = acc / self.test_data_size
 
             if test_acc > max_acc:
                 max_acc = test_acc
