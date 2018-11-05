@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.ops import math_ops
 import time
+import math
 from utils import get_batch_index
 
 
@@ -29,15 +30,15 @@ class IAN(object):
             self.aspect_lens = tf.placeholder(tf.int32, None)
             self.context_lens = tf.placeholder(tf.int32, None)
             self.dropout_keep_prob = tf.placeholder(tf.float32)
-            
+
             aspect_inputs = tf.nn.embedding_lookup(self.embedding_matrix, self.aspects)
             aspect_inputs = tf.cast(aspect_inputs, tf.float32)
             aspect_inputs = tf.nn.dropout(aspect_inputs, keep_prob=self.dropout_keep_prob)
-            
+
             context_inputs = tf.nn.embedding_lookup(self.embedding_matrix, self.contexts)
             context_inputs = tf.cast(context_inputs, tf.float32)
             context_inputs = tf.nn.dropout(context_inputs, keep_prob=self.dropout_keep_prob)
-        
+
         with tf.name_scope('weights'):
             weights = {
                 'aspect_score': tf.get_variable(
@@ -59,7 +60,7 @@ class IAN(object):
                     regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg)
                 ),
             }
-        
+
         with tf.name_scope('biases'):
             biases = {
                 'aspect_score': tf.get_variable(
@@ -81,7 +82,7 @@ class IAN(object):
                     regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg)
                 ),
             }
-        
+
         with tf.name_scope('dynamic_rnn'):
             aspect_outputs, aspect_state = tf.nn.dynamic_rnn(
                 tf.contrib.rnn.LSTMCell(self.n_hidden),
@@ -92,7 +93,7 @@ class IAN(object):
             )
             batch_size = tf.shape(aspect_outputs)[0]
             aspect_avg = tf.reduce_mean(aspect_outputs, 1)
-            
+
             context_outputs, context_state = tf.nn.dynamic_rnn(
                 tf.contrib.rnn.LSTMCell(self.n_hidden),
                 inputs=context_inputs,
@@ -115,18 +116,23 @@ class IAN(object):
                 a = aspect_outputs_iter.read(i)
                 b = context_avg_iter.read(i)
                 l = math_ops.to_int32(aspect_lens_iter.read(i))
-                aspect_score = tf.reshape(tf.nn.tanh(tf.matmul(tf.matmul(a, weights['aspect_score']), tf.reshape(b, [-1, 1])) + biases['aspect_score']), [1, -1])
-                aspect_att_temp = tf.concat([tf.nn.softmax(tf.slice(aspect_score, [0, 0], [1, l])), tf.zeros([1, self.max_aspect_len - l])], 1)
+                aspect_score = tf.reshape(tf.nn.tanh(
+                    tf.matmul(tf.matmul(a, weights['aspect_score']), tf.reshape(b, [-1, 1])) + biases['aspect_score']),
+                    [1, -1])
+                aspect_att_temp = tf.concat(
+                    [tf.nn.softmax(tf.slice(aspect_score, [0, 0], [1, l])), tf.zeros([1, self.max_aspect_len - l])], 1)
                 aspect_att = aspect_att.write(i, aspect_att_temp)
                 aspect_rep = aspect_rep.write(i, tf.matmul(aspect_att_temp, a))
                 return (i + 1, aspect_rep, aspect_att)
 
             def condition(i, aspect_rep, aspect_att):
                 return i < batch_size
-            _, aspect_rep_final, aspect_att_final = tf.while_loop(cond=condition, body=body, loop_vars=(0, aspect_rep, aspect_att))
+
+            _, aspect_rep_final, aspect_att_final = tf.while_loop(cond=condition, body=body,
+                                                                  loop_vars=(0, aspect_rep, aspect_att))
             self.aspect_atts = tf.reshape(aspect_att_final.stack(), [-1, self.max_aspect_len])
             self.aspect_reps = tf.reshape(aspect_rep_final.stack(), [-1, self.n_hidden])
-            
+
             context_outputs_iter = tf.TensorArray(tf.float32, 1, dynamic_size=True, infer_shape=False)
             context_outputs_iter = context_outputs_iter.unstack(context_outputs)
             aspect_avg_iter = tf.TensorArray(tf.float32, 1, dynamic_size=True, infer_shape=False)
@@ -140,72 +146,57 @@ class IAN(object):
                 a = context_outputs_iter.read(i)
                 b = aspect_avg_iter.read(i)
                 l = math_ops.to_int32(context_lens_iter.read(i))
-                context_score = tf.reshape(tf.nn.tanh(tf.matmul(tf.matmul(a, weights['context_score']), tf.reshape(b, [-1, 1])) + biases['context_score']), [1, -1])
-                context_att_temp = tf.concat([tf.nn.softmax(tf.slice(context_score, [0, 0], [1, l])), tf.zeros([1, self.max_context_len - l])], 1)
+                context_score = tf.reshape(tf.nn.tanh(
+                    tf.matmul(tf.matmul(a, weights['context_score']), tf.reshape(b, [-1, 1])) + biases[
+                        'context_score']), [1, -1])
+                context_att_temp = tf.concat(
+                    [tf.nn.softmax(tf.slice(context_score, [0, 0], [1, l])), tf.zeros([1, self.max_context_len - l])],
+                    1)
                 context_att = context_att.write(i, context_att_temp)
                 context_rep = context_rep.write(i, tf.matmul(context_att_temp, a))
                 return (i + 1, context_rep, context_att)
 
             def condition(i, context_rep, context_att):
                 return i < batch_size
-            _, context_rep_final, context_att_final = tf.while_loop(cond=condition, body=body, loop_vars=(0, context_rep, context_att))
+
+            _, context_rep_final, context_att_final = tf.while_loop(cond=condition, body=body,
+                                                                    loop_vars=(0, context_rep, context_att))
             self.context_atts = tf.reshape(context_att_final.stack(), [-1, self.max_context_len])
             self.context_reps = tf.reshape(context_rep_final.stack(), [-1, self.n_hidden])
-            
+
             self.reps = tf.concat([self.aspect_reps, self.context_reps], 1)
             self.predict = tf.matmul(self.reps, weights['softmax']) + biases['softmax']
 
         with tf.name_scope('loss'):
-            self.cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits = self.predict, labels = self.labels))
+            self.total_cost = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.predict, labels=self.labels)
+            self.cost = tf.reduce_mean(self.total_cost)
             self.global_step = tf.Variable(0, name="tr_global_step", trainable=False)
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost, global_step=self.global_step)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost,
+                                                                                               global_step=self.global_step)
 
         with tf.name_scope('predict'):
             self.correct_pred = tf.equal(tf.argmax(self.predict, 1), tf.argmax(self.labels, 1))
             self.accuracy = tf.reduce_sum(tf.cast(self.correct_pred, tf.int32))
-            
+
         summary_loss = tf.summary.scalar('loss', self.cost)
         summary_acc = tf.summary.scalar('acc', self.accuracy)
         self.train_summary_op = tf.summary.merge([summary_loss, summary_acc])
         self.test_summary_op = tf.summary.merge([summary_loss, summary_acc])
         timestamp = str(int(time.time()))
-        _dir = 'logs/' + str(timestamp) + '_r' + str(self.learning_rate) + '_b' + str(self.batch_size) + '_l' + str(self.l2_reg)
+        _dir = 'logs/' + str(timestamp) + '_r' + str(self.learning_rate) + '_b' + str(self.batch_size) + '_l' + str(
+            self.l2_reg)
         self.train_summary_writer = tf.summary.FileWriter(_dir + '/train', self.sess.graph)
         self.test_summary_writer = tf.summary.FileWriter(_dir + '/test', self.sess.graph)
-
-    def train(self, data):
-        aspects, contexts, labels, aspect_lens, context_lens = data
-        cost, cnt = 0., 0
-
-        for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, self.batch_size, True, self.dropout):
-            _, loss, step, summary = self.sess.run([self.optimizer, self.cost, self.global_step, self.train_summary_op], feed_dict=sample)
-            self.train_summary_writer.add_summary(summary, step)
-            cost += loss * num
-            cnt += num
-
-        _, train_acc = self.test(data)
-        return cost / cnt, train_acc
-
-    def test(self, data):
-        aspects, contexts, labels, aspect_lens, context_lens = data
-        cost, acc, cnt = 0., 0, 0
-
-        for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects), False, 1.0):
-            loss, accuracy, step, summary = self.sess.run([self.cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict=sample)
-            cost += loss * num
-            acc += accuracy
-            cnt += num
-
-        self.test_summary_writer.add_summary(summary, step)
-        return cost / cnt, acc / cnt
 
     def analysis(self, train_data, test_data):
         timestamp = str(int(time.time()))
 
         aspects, contexts, labels, aspect_lens, context_lens = train_data
         with open('analysis/train_' + str(timestamp) + '.txt', 'w') as f:
-            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects), False, 1.0):
-                aspect_atts, context_atts, correct_pred = self.sess.run([self.aspect_atts, self.context_atts, self.correct_pred], feed_dict=sample)
+            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects),
+                                                   False, 1.0):
+                aspect_atts, context_atts, correct_pred = self.sess.run(
+                    [self.aspect_atts, self.context_atts, self.correct_pred], feed_dict=sample)
                 for a, b, c in zip(aspect_atts, context_atts, correct_pred):
                     a = str(a).replace('\n', '')
                     b = str(b).replace('\n', '')
@@ -214,43 +205,69 @@ class IAN(object):
 
         aspects, contexts, labels, aspect_lens, context_lens = test_data
         with open('analysis/test_' + str(timestamp) + '.txt', 'w') as f:
-            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects), False, 1.0):
-                aspect_atts, context_atts, correct_pred = self.sess.run([self.aspect_atts, self.context_atts, self.correct_pred], feed_dict=sample)
+            for sample, num in self.get_batch_data(aspects, contexts, labels, aspect_lens, context_lens, len(aspects),
+                                                   False, 1.0):
+                aspect_atts, context_atts, correct_pred = self.sess.run(
+                    [self.aspect_atts, self.context_atts, self.correct_pred], feed_dict=sample)
                 for a, b, c in zip(aspect_atts, context_atts, correct_pred):
                     a = str(a).replace('\n', '')
                     b = str(b).replace('\n', '')
                     f.write('%s\n%s\n%s\n' % (a, b, c))
         print('Finishing analyzing testing data')
-    
+
     def run(self, train_data, test_data):
         saver = tf.train.Saver(tf.trainable_variables())
+
+        train_data_size = len(train_data[0])
+        train_data = tf.data.Dataset.from_tensor_slices(train_data)
+        train_data = train_data.shuffle(buffer_size=train_data_size)
+        train_data = train_data.batch(self.batch_size)
+        train_data = train_data.repeat()
+        train_iter = train_data.make_one_shot_iterator()
+        next_train_el = train_iter.get_next()
+
+        test_data_size = len(test_data[0])
+        test_data = tf.data.Dataset.from_tensor_slices(test_data)
+        test_data = test_data.batch(test_data_size)
+        test_iter = test_data.make_one_shot_iterator()
+        next_test_el = test_iter.get_next()
 
         print('Training ...')
         self.sess.run(tf.global_variables_initializer())
         max_acc, step = 0., -1
         for i in range(self.n_epoch):
-            train_loss, train_acc = self.train(train_data)
-            test_loss, test_acc = self.test(test_data)
+            cost, acc = 0., 0
+            for _ in range(math.ceil(train_data_size / self.batch_size)):
+                _, _, loss, accuracy, step, summary = self.sess.run(
+                    [next_train_el, self.optimizer, self.total_cost, self.accuracy, self.global_step,
+                     self.train_summary_op], feed_dict={self.dropout_keep_prob: self.dropout})
+                cost += loss
+                acc += accuracy
+                self.train_summary_writer.add_summary(summary, step)
+
+            train_loss = cost / train_data_size
+            train_acc = acc / train_data_size
+
+            cost, acc = 0., 0
+            _, loss, accuracy, step, summary = self.sess.run(
+                [next_test_el, self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
+            cost += loss
+            acc += accuracy
+            self.test_summary_writer.add_summary(summary, step)
+
+            test_loss = cost / test_data_size
+            test_acc = acc / test_data_size
+
             if test_acc > max_acc:
                 max_acc = test_acc
                 step = i
                 saver.save(self.sess, 'models/model_iter', global_step=step)
-            print('epoch %s: train-loss=%.6f; train-acc=%.6f; test-loss=%.6f; test-acc=%.6f;' % (str(i), train_loss, train_acc, test_loss, test_acc))
+            print('epoch %s: train-loss=%.6f; train-acc=%.6f; test-loss=%.6f; test-acc=%.6f;' % (
+            str(i), train_loss, train_acc, test_loss, test_acc))
+
         saver.save(self.sess, 'models/model_final')
         print('The max accuracy of testing results is %s of step %s' % (max_acc, step))
 
-        print('Analyzing ...')
-        saver.restore(self.sess, tf.train.latest_checkpoint('models/'))
-        self.analysis(train_data, test_data)
-
-    def get_batch_data(self, aspects, contexts, labels, aspect_lens, context_lens, batch_size, is_shuffle, keep_prob):
-        for index in get_batch_index(len(aspects), batch_size, is_shuffle):
-            feed_dict = {
-                self.aspects: aspects[index],
-                self.contexts: contexts[index],
-                self.labels: labels[index],
-                self.aspect_lens: aspect_lens[index],
-                self.context_lens: context_lens[index],
-                self.dropout_keep_prob: keep_prob,
-            }
-            yield feed_dict, len(index)
+        # print('Analyzing ...')
+        # saver.restore(self.sess, tf.train.latest_checkpoint('models/'))
+        # self.analysis(train_data, test_data)

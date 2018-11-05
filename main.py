@@ -5,6 +5,7 @@ import os
 import time
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_integer('embedding_dim', 300, 'dimension of word embedding')
@@ -38,7 +39,9 @@ def main(_):
     print('Loading pre-trained word vectors ...')
     FLAGS.embedding_matrix = load_word_embeddings(FLAGS.embedding_file_name, FLAGS.embedding_dim, word2id)
 
-    with tf.Session() as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.per_process_gpu_memory_fraction = 0.5
+    with tf.Session(config=config) as sess:
         model = IAN(FLAGS, sess)
         model.build_model()
         model.run(train_data, test_data)
