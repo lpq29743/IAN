@@ -2,7 +2,6 @@ import tensorflow as tf
 from tensorflow.python.ops import math_ops
 import time
 import math
-from utils import get_batch_index
 
 
 class IAN(object):
@@ -27,12 +26,11 @@ class IAN(object):
             self.train_data_size = len(train_data[0])
             train_data = tf.data.Dataset.from_tensor_slices(train_data)
             train_data = train_data.shuffle(buffer_size=self.train_data_size)
-            train_data = train_data.batch(self.batch_size)
-            train_data = train_data.repeat()
+            train_data = train_data.batch(self.batch_size).repeat(self.n_epoch)
 
             self.test_data_size = len(test_data[0])
             test_data = tf.data.Dataset.from_tensor_slices(test_data)
-            test_data = test_data.batch(self.test_data_size)
+            test_data = test_data.batch(self.batch_size)
 
             iterator = tf.data.Iterator.from_structure(train_data.output_types, test_data.output_shapes)
             self.aspects, self.contexts, self.labels, self.aspect_lens, self.context_lens = iterator.get_next()
@@ -118,7 +116,7 @@ class IAN(object):
             aspect_outputs_iter = aspect_outputs_iter.unstack(aspect_outputs)
             context_avg_iter = tf.TensorArray(tf.float32, 1, dynamic_size=True, infer_shape=False)
             context_avg_iter = context_avg_iter.unstack(context_avg)
-            aspect_lens_iter = tf.TensorArray(tf.int32, 1, dynamic_size=True, infer_shape=False)
+            aspect_lens_iter = tf.TensorArray(tf.int64, 1, dynamic_size=True, infer_shape=False)
             aspect_lens_iter = aspect_lens_iter.unstack(self.aspect_lens)
             aspect_rep = tf.TensorArray(size=batch_size, dtype=tf.float32)
             aspect_att = tf.TensorArray(size=batch_size, dtype=tf.float32)
@@ -148,7 +146,7 @@ class IAN(object):
             context_outputs_iter = context_outputs_iter.unstack(context_outputs)
             aspect_avg_iter = tf.TensorArray(tf.float32, 1, dynamic_size=True, infer_shape=False)
             aspect_avg_iter = aspect_avg_iter.unstack(aspect_avg)
-            context_lens_iter = tf.TensorArray(tf.int32, 1, dynamic_size=True, infer_shape=False)
+            context_lens_iter = tf.TensorArray(tf.int64, 1, dynamic_size=True, infer_shape=False)
             context_lens_iter = context_lens_iter.unstack(self.context_lens)
             context_rep = tf.TensorArray(size=batch_size, dtype=tf.float32)
             context_att = tf.TensorArray(size=batch_size, dtype=tf.float32)
@@ -179,15 +177,16 @@ class IAN(object):
             self.predict = tf.matmul(self.reps, weights['softmax']) + biases['softmax']
 
         with tf.name_scope('loss'):
-            self.total_cost = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.predict, labels=self.labels)
-            self.cost = tf.reduce_mean(self.total_cost)
+            self.ce_cost = tf.nn.softmax_cross_entropy_with_logits_v2(logits=self.predict, labels=self.labels)
+            self.total_cost = tf.reduce_sum(self.ce_cost)
+            self.cost = tf.reduce_mean(self.ce_cost)
             self.global_step = tf.Variable(0, name="tr_global_step", trainable=False)
             self.optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate).minimize(self.cost,
                                                                                                global_step=self.global_step)
 
         with tf.name_scope('predict'):
             self.correct_pred = tf.equal(tf.argmax(self.predict, 1), tf.argmax(self.labels, 1))
-            self.accuracy = tf.reduce_sum(tf.cast(self.correct_pred, tf.int32))
+            self.accuracy = tf.reduce_sum(tf.cast(self.correct_pred, tf.int64))
 
         summary_loss = tf.summary.scalar('loss', self.cost)
         summary_acc = tf.summary.scalar('acc', self.accuracy)
@@ -226,19 +225,18 @@ class IAN(object):
                     f.write('%s\n%s\n%s\n' % (a, b, c))
         print('Finishing analyzing testing data')
 
-    def run(self, train_data, test_data):
+    def run(self):
         saver = tf.train.Saver(tf.trainable_variables())
-
-
 
         print('Training ...')
         self.sess.run(tf.global_variables_initializer())
+        self.sess.run([self.train_init_op, self.test_init_op])
         max_acc, step = 0., -1
         for i in range(self.n_epoch):
             cost, acc = 0., 0
             for _ in range(math.ceil(self.train_data_size / self.batch_size)):
-                _, _, loss, accuracy, step, summary = self.sess.run(
-                    [self.train_init_op, self.optimizer, self.total_cost, self.accuracy, self.global_step,
+                _, loss, accuracy, step, summary = self.sess.run(
+                    [self.optimizer, self.total_cost, self.accuracy, self.global_step,
                      self.train_summary_op], feed_dict={self.dropout_keep_prob: self.dropout})
                 cost += loss
                 acc += accuracy
@@ -248,11 +246,11 @@ class IAN(object):
             train_acc = acc / self.train_data_size
 
             cost, acc = 0., 0
-            _, loss, accuracy, step, summary = self.sess.run(
-                [self.test_init_op, self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
-            cost += loss
-            acc += accuracy
-            self.test_summary_writer.add_summary(summary, step)
+            for _ in range(math.ceil(self.test_data_size / self.batch_size)):
+                loss, accuracy, step, summary = self.sess.run([self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
+                cost += loss
+                acc += accuracy
+                self.test_summary_writer.add_summary(summary, step)
 
             test_loss = cost / self.test_data_size
             test_acc = acc / self.test_data_size
