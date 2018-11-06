@@ -26,11 +26,11 @@ class IAN(object):
             self.train_data_size = len(train_data[0])
             train_data = tf.data.Dataset.from_tensor_slices(train_data)
             train_data = train_data.shuffle(buffer_size=self.train_data_size)
-            train_data = train_data.batch(self.batch_size).repeat(self.n_epoch)
+            train_data = train_data.batch(self.batch_size).repeat()
 
             self.test_data_size = len(test_data[0])
             test_data = tf.data.Dataset.from_tensor_slices(test_data)
-            test_data = test_data.batch(self.batch_size)
+            test_data = test_data.batch(self.test_data_size).repeat()
 
             iterator = tf.data.Iterator.from_structure(train_data.output_types, test_data.output_shapes)
             self.aspects, self.contexts, self.labels, self.aspect_lens, self.context_lens = iterator.get_next()
@@ -230,10 +230,11 @@ class IAN(object):
 
         print('Training ...')
         self.sess.run(tf.global_variables_initializer())
-        self.sess.run([self.train_init_op, self.test_init_op])
+
         max_acc, step = 0., -1
         for i in range(self.n_epoch):
             cost, acc = 0., 0
+            self.sess.run(self.train_init_op)
             for _ in range(math.ceil(self.train_data_size / self.batch_size)):
                 _, loss, accuracy, step, summary = self.sess.run(
                     [self.optimizer, self.total_cost, self.accuracy, self.global_step,
@@ -245,12 +246,9 @@ class IAN(object):
             train_loss = cost / self.train_data_size
             train_acc = acc / self.train_data_size
 
-            cost, acc = 0., 0
-            for _ in range(math.ceil(self.test_data_size / self.batch_size)):
-                loss, accuracy, step, summary = self.sess.run([self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
-                cost += loss
-                acc += accuracy
-                self.test_summary_writer.add_summary(summary, step)
+            self.sess.run(self.test_init_op)
+            cost, acc, step, summary = self.sess.run([self.total_cost, self.accuracy, self.global_step, self.test_summary_op], feed_dict={self.dropout_keep_prob: 1.0})
+            self.test_summary_writer.add_summary(summary, step)
 
             test_loss = cost / self.test_data_size
             test_acc = acc / self.test_data_size
