@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.ops import math_ops
 import time
 import math
@@ -197,6 +198,9 @@ class IAN(object):
             self.l2_reg)
         self.train_summary_writer = tf.summary.FileWriter(_dir + '/train', self.sess.graph)
         self.test_summary_writer = tf.summary.FileWriter(_dir + '/test', self.sess.graph)
+
+        param_num = sum([np.prod(self.sess.run(tf.shape(v))) for v in tf.trainable_variables()])
+        print('There are %d parameters in the model' % param_num)
 
     def analysis(self, train_data, test_data):
         timestamp = str(int(time.time()))
