@@ -4,8 +4,8 @@ import xml.etree.ElementTree as ET
 from errno import ENOENT
 
 
-input_fname = 'data/restaurant/test.xml'
-output_fname = 'data/restaurant/test.txt'
+input_fname = 'data/laptop/train.xml'
+output_fname = 'data/laptop/train.txt'
 
 if not os.path.isfile(input_fname):
     raise IOError(ENOENT, 'Not an input file', input_fname)
