@@ -41,6 +41,11 @@ A Tensorflow implementation for ["Interactive Attention Networks for Aspect-Leve
 | Laptop     | 70.846   |
 | Restaurant | 79.107   |
 
+Note: In the newest version, the results are worse than the results given above, since the code of the model is revised.
+I will optimize the model sooner and report the results.
+
 ## Todo List
 
 - Implementing by other deep learning frameworks
+- Softmax mask
+- Optimization to get better performance
