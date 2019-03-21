@@ -20,7 +20,7 @@ def get_data_info(dataset, pre_processed):
             raise IOError(ENOENT, 'Not a file', save_fname)
         with open(save_fname, 'r') as f:
             for line in f:
-                content = line.strip().split()
+                content = line.rstrip().split(' ')
                 if len(content) == 3:
                     max_aspect_len = int(content[1])
                     max_context_len = int(content[2])
@@ -44,10 +44,6 @@ def get_data_info(dataset, pre_processed):
             if len(sptoks) > max_aspect_len:
                 max_aspect_len = len(sptoks)
             words.extend([sp.text.lower() for sp in sptoks])
-        word_count = Counter(words).most_common()
-        for word, _ in word_count:
-            if word not in word2id and ' ' not in word and '\n' not in word and 'aspect_term' not in word:
-                word2id[word] = len(word2id)
 
         lines = open(test_fname, 'r').readlines()
         for i in range(0, len(lines), 3):
@@ -59,8 +55,11 @@ def get_data_info(dataset, pre_processed):
             if len(sptoks) > max_aspect_len:
                 max_aspect_len = len(sptoks)
             words.extend([sp.text.lower() for sp in sptoks])
+
         word_count = Counter(words).most_common()
         for word, _ in word_count:
+            if word == ' ':
+                print('haha')
             if word not in word2id and ' ' not in word and '\n' not in word and 'aspect_term' not in word:
                 word2id[word] = len(word2id)
 
